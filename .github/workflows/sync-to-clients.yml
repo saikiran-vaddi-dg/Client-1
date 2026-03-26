@@ -9,7 +9,7 @@ on:
   push:
     branches:
       - base/dev
-      - base/stag
+      - base/staging
       - base/qa
 
 jobs:
