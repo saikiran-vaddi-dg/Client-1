@@ -1,0 +1,43 @@
+name: Sync base/dev to Client-1
+
+on:
+  push:
+    branches:
+      - base/dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-platform-to-client1-base-dev
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Platform (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push base/dev to Client-1 base/dev
+        env:
+          TARGET_REPO: saikiran-vaddi-dg/Client-1
+          TARGET_BRANCH: base/dev
+          TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN}" ]; then
+            echo "Missing secrets.CLIENT_DISPATCH_PAT"
+            exit 1
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add client1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          git checkout base/dev
+          git push --force-with-lease client1 "HEAD:${TARGET_BRANCH}"
