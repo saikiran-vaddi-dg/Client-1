@@ -1,0 +1,152 @@
+# FILE LOCATION: CLIENT-1 repo → .github/workflows/sync-platform.yml
+# Commit this to the MAIN branch of your CLIENT-1 repo
+
+name: Sync Platform → CLIENT-1
+
+on:
+  # ✅ Auto-triggered when PLATFORM repo pushes to base/*
+  repository_dispatch:
+    types:
+      - platform-base-updated
+
+  # ✅ Manual trigger — lets you pick a specific branch or sync all
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch suffix to sync (dev / stag / qa) — leave empty for all'
+        required: false
+        default: ''
+
+jobs:
+  sync-and-merge:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout CLIENT-1 repo with full history
+      - name: Checkout CLIENT-1
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CLIENT_PAT }}
+
+      # 2. Git config + add PLATFORM as upstream
+      - name: Setup Git & upstream remote
+        run: |
+          git config --global user.email "saikiranvaddi@demo.com"
+          git config --global user.name "Saikiran Vaddi"
+
+          # PAT injected via URL rewrite — not embedded in the remote URL
+          git config --global url."https://${{ secrets.PLATFORM_PAT }}@github.com/".insteadOf \
+            "https://github.com/"
+
+          git remote add upstream \
+            https://github.com/${{ vars.PLATFORM_ORG }}/${{ vars.PLATFORM_REPO }}.git
+
+          git fetch upstream
+          git fetch origin
+
+      # 3. Determine which branch(es) to process
+      - name: Resolve target branches
+        id: targets
+        run: |
+          if [ -n "${{ github.event.inputs.branch }}" ]; then
+            # Manual run with specific branch suffix
+            echo "suffixes=${{ github.event.inputs.branch }}" >> $GITHUB_OUTPUT
+
+          elif [ -n "${{ github.event.client_payload.branch }}" ]; then
+            # Triggered by PLATFORM push — strip "base/" prefix to get suffix
+            FULL="${{ github.event.client_payload.branch }}"
+            SUFFIX="${FULL#base/}"
+            echo "suffixes=$SUFFIX" >> $GITHUB_OUTPUT
+
+          else
+            # Manual run with no input — sync all three branches
+            echo "suffixes=dev stag qa" >> $GITHUB_OUTPUT
+          fi
+
+      # 4. Sync: upstream/base/* → origin/base/*
+      - name: Sync base/* from platform
+        run: |
+          set -e
+          FAILED=""
+
+          for suffix in ${{ steps.targets.outputs.suffixes }}; do
+            BASE="base/$suffix"
+            echo "========================================"
+            echo "Syncing $BASE from upstream"
+
+            git fetch upstream
+            git fetch origin
+
+            # Skip if this branch doesn't exist on upstream
+            if ! git show-ref --verify --quiet refs/remotes/upstream/$BASE; then
+              echo "⚠️  upstream/$BASE not found — skipping"
+              continue
+            fi
+
+            # Checkout base branch (reset to origin if exists, else create fresh)
+            git checkout -B $BASE origin/$BASE 2>/dev/null || git checkout -B $BASE
+
+            if git merge upstream/$BASE --no-edit --allow-unrelated-histories; then
+              echo "✅ Synced: upstream/$BASE → origin/$BASE"
+              git push origin $BASE
+            else
+              echo "❌ Conflict on $BASE"
+              git merge --abort
+              FAILED="$FAILED $BASE"
+            fi
+          done
+
+          if [ -n "$FAILED" ]; then
+            echo "❌ Sync failed for:$FAILED"
+            exit 1
+          fi
+
+      # 5. Merge: base/* → client1/*
+      - name: Merge base/* into client1/*
+        run: |
+          set -e
+          FAILED=""
+
+          for suffix in ${{ steps.targets.outputs.suffixes }}; do
+            BASE="base/$suffix"
+            CLIENT="client1/$suffix"
+            echo "========================================"
+            echo "Merging $BASE → $CLIENT"
+
+            git fetch origin
+
+            # Skip if base branch missing on origin
+            if ! git show-ref --verify --quiet refs/remotes/origin/$BASE; then
+              echo "⚠️  origin/$BASE not found — skipping"
+              continue
+            fi
+
+            # Checkout client1 branch
+            if git show-ref --verify --quiet refs/remotes/origin/$CLIENT; then
+              git checkout -B $CLIENT origin/$CLIENT
+              git fetch origin $CLIENT
+              git reset --hard origin/$CLIENT
+            else
+              echo "Creating $CLIENT from $BASE"
+              git checkout -B $CLIENT origin/$BASE
+              git push -u origin $CLIENT
+            fi
+
+            if git merge origin/$BASE --no-edit; then
+              echo "✅ Merged: $BASE → $CLIENT"
+              git push origin $CLIENT
+            else
+              echo "❌ Conflict on $CLIENT"
+              git merge --abort
+              FAILED="$FAILED $CLIENT"
+            fi
+          done
+
+          if [ -n "$FAILED" ]; then
+            echo "❌ Merge failed for:$FAILED"
+            exit 1
+          fi
+
+          echo ""
+          echo "✅ All done."
