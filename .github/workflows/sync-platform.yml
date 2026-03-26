@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch suffix to sync (dev / stag / qa) — leave empty for all'
+        description: 'Branch suffix to sync (dev / staging / qa) — leave empty for all'
         required: false
         default: ''
 
@@ -61,7 +61,7 @@ jobs:
 
           else
             # Manual run with no input — sync all three branches
-            echo "suffixes=dev stag qa" >> $GITHUB_OUTPUT
+            echo "suffixes=dev staging qa" >> $GITHUB_OUTPUT
           fi
 
       # 4. Sync: upstream/base/* → origin/base/*
