@@ -24,7 +24,7 @@ jobs:
 
       - name: Push mirror to CLIENT-1
         env:
-          CLIENT1_TOKEN: ${{ secrets.CLIENT1_REPO_TOKEN }}
+          CLIENT1_TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
           BRANCH: ${{ github.ref_name }}   # e.g. base/dev
         run: |
           git remote add client1 https://x-access-token:${CLIENT1_TOKEN}@github.com/your-org/CLIENT-1.git
