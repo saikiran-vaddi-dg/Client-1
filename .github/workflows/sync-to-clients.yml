@@ -1,16 +1,43 @@
-# .github/workflows/sync-clients.yml (in platform repo)
+name: Sync base/dev to Client-1
+
 on:
   push:
-    branches: ['base/dev']
+    branches:
+      - base/dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-platform-to-client1-base-dev
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Platform (full history)
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Push mirror to Client-1
+
+      - name: Push base/dev to Client-1 base/dev
+        env:
+          TARGET_REPO: saikiran-vaddi-dg/Client-1
+          TARGET_BRANCH: base/dev
+          TOKEN: ${{ secrets.CLIENT1_SYNC_TOKEN }}
         run: |
-          git remote add client1 https://x-access-token:${{ secrets.CLIENT_DISPATCH_PAT }}@github.com/saikiran-vaddi-dg/Client-1.git
-          git push client1 HEAD:refs/heads/${{ github.ref_name }} --force
+          set -euo pipefail
+
+          if [ -z "${TOKEN}" ]; then
+            echo "Missing secrets.CLIENT1_SYNC_TOKEN"
+            exit 1
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git remote add client1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          git checkout base/dev
+          git push --force-with-lease client1 "HEAD:${TARGET_BRANCH}"
