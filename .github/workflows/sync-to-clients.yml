@@ -25,12 +25,12 @@ jobs:
         env:
           TARGET_REPO: saikiran-vaddi-dg/Client-1
           TARGET_BRANCH: base/dev
-          TOKEN: ${{ secrets.CLIENT1_SYNC_TOKEN }}
+          TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
         run: |
           set -euo pipefail
 
           if [ -z "${TOKEN}" ]; then
-            echo "Missing secrets.CLIENT1_SYNC_TOKEN"
+            echo "Missing secrets.CLIENT_DISPATCH_PAT"
             exit 1
           fi
 
