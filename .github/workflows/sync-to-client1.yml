@@ -20,8 +20,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Validate PAT and sync to Client-1
+      - name: Sync to Client-1
         env:
           TARGET_REPO: saikiran-vaddi-dg/Client-1
           TARGET_BRANCH: base/dev
@@ -34,7 +35,6 @@ jobs:
             exit 1
           fi
 
-          # Verify token works (and shows which user it belongs to)
           curl -fsSL -H "Authorization: token ${TOKEN}" https://api.github.com/user > /dev/null
 
           git config user.name  "saikiran-vaddi-dg"
