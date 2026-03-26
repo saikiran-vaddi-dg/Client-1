@@ -27,6 +27,6 @@ jobs:
           CLIENT1_TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
           BRANCH: ${{ github.ref_name }}   # e.g. base/dev
         run: |
-          git remote add client1 https://x-access-token:${CLIENT1_TOKEN}@github.com/your-org/CLIENT-1.git
+          git remote add client1 https://x-access-token:${CLIENT1_TOKEN}@github.com/saikiran-vaddi-dg/CLIENT-1.git
           git push client1 HEAD:refs/heads/${BRANCH} --force
           echo "✅ Synced ${BRANCH} → CLIENT-1/${BRANCH}"
