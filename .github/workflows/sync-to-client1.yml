@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push base/dev to Client-1 base/dev
+      - name: Validate PAT and sync to Client-1
         env:
           TARGET_REPO: saikiran-vaddi-dg/Client-1
           TARGET_BRANCH: base/dev
@@ -34,9 +34,13 @@ jobs:
             exit 1
           fi
 
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Verify token works (and shows which user it belongs to)
+          curl -fsSL -H "Authorization: token ${TOKEN}" https://api.github.com/user > /dev/null
 
+          git config user.name  "saikiran-vaddi-dg"
+          git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
+
+          git remote remove client1 2>/dev/null || true
           git remote add client1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
 
           git checkout base/dev
