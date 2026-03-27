@@ -42,8 +42,8 @@ jobs:
           git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
 
           # Add target remote using PAT
-          git remote remove client1 2>/dev/null || true
-          git remote add client1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+          git remote remove Client-1 2>/dev/null || true
+          git remote add Client-1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
 
           # Ensure we're on the source branch
           git checkout base/dev
