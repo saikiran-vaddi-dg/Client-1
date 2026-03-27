@@ -52,4 +52,5 @@ jobs:
           git fetch --prune Client-1 "${TARGET_BRANCH}:${TARGET_BRANCH}" || true
 
           # Push source to target (keeps Client-1/base/dev aligned to Platform/base/dev)
-          git push --force-with-lease Client-1 "HEAD:${TARGET_BRANCH}"
+          git push --force Client-1 "HEAD:${TARGET_BRANCH}"
+ 
