@@ -1,30 +1,44 @@
-name: Sync base/dev to Client-1
+name: Sync base branches to Clients
 
 on:
   push:
     branches:
       - base/dev
+      - base/int
 
 permissions:
   contents: read
 
 concurrency:
-  group: sync-platform-to-client1-base-dev
+  group: sync-platform-${{ github.ref_name }}-to-clients
   cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false          # continue other clients if one fails
+      matrix:
+        client:
+          - repo: saikiran-vaddi-dg/Client-1
+            remote: Client-1
+            prefix: client1
+          - repo: saikiran-vaddi-dg/Client-2
+            remote: Client-2
+            prefix: client2
+
     steps:
       - name: Checkout Platform (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Push base/dev to Client-1 base/dev
+      - name: Sync ${{ github.ref_name }} to ${{ matrix.client.remote }}
         env:
-          TARGET_REPO: saikiran-vaddi-dg/Client-1
-          TARGET_BRANCH: base/dev
+          TARGET_REPO: ${{ matrix.client.repo }}
+          TARGET_REMOTE: ${{ matrix.client.remote }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
           TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
         run: |
           set -euo pipefail
@@ -34,10 +48,55 @@ jobs:
             exit 1
           fi
 
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Validate token works (does not print token)
+          curl -fsSL -H "Authorization: token ${TOKEN}" https://api.github.com/user > /dev/null
 
-          git remote add client1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+          git config user.name  "saikiran-vaddi-dg"
+          git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
 
-          git checkout base/dev
-          git push --force-with-lease client1 "HEAD:${TARGET_BRANCH}"
+          # Add target remote using PAT
+          git remote remove "${TARGET_REMOTE}" 2>/dev/null || true
+          git remote add "${TARGET_REMOTE}" "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          # Ensure we're on the source branch
+          git checkout "${SOURCE_BRANCH}"
+
+          # Fetch latest remote state
+          git fetch --prune "${TARGET_REMOTE}" "${SOURCE_BRANCH}:${SOURCE_BRANCH}" || true
+
+          # Push source to target (e.g. base/dev → Client-1/base/dev)
+          git push --force "${TARGET_REMOTE}" "HEAD:${SOURCE_BRANCH}"
+
+      - name: Merge ${{ github.ref_name }} into ${{ matrix.client.remote }} ${{ matrix.client.prefix }} branch
+        env:
+          TARGET_REPO: ${{ matrix.client.repo }}
+          TARGET_REMOTE: ${{ matrix.client.remote }}
+          CLIENT_PREFIX: ${{ matrix.client.prefix }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+          TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "saikiran-vaddi-dg"
+          git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
+
+          # Derive client branch: base/dev → client1/dev, base/int → client1/int
+          SUFFIX="${SOURCE_BRANCH#base/}"
+          CLIENT_BRANCH="${CLIENT_PREFIX}/${SUFFIX}"
+
+          git remote remove "${TARGET_REMOTE}" 2>/dev/null || true
+          git remote add "${TARGET_REMOTE}" "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          # Fetch both branches
+          git fetch "${TARGET_REMOTE}" "${SOURCE_BRANCH}" "${CLIENT_BRANCH}" || {
+            echo "Failed to fetch branches from ${TARGET_REMOTE} — skipping merge"
+            exit 0
+          }
+
+          # Switch to client branch and merge source into it
+          git checkout -B "${CLIENT_BRANCH}" "${TARGET_REMOTE}/${CLIENT_BRANCH}"
+          git merge "${TARGET_REMOTE}/${SOURCE_BRANCH}" --no-edit --allow-unrelated-histories \
+            -m "chore: merge ${SOURCE_BRANCH} into ${CLIENT_BRANCH} [auto-sync]"
+
+          # Push merged branch back
+          git push "${TARGET_REMOTE}" "HEAD:${CLIENT_BRANCH}"
