@@ -77,7 +77,7 @@ jobs:
 
           # Switch to client1/dev and merge base/dev into it
           git checkout "${CLIENT_BRANCH}"
-          git merge base/dev --no-edit -m "chore: merge base/dev into ${CLIENT_BRANCH} [auto-sync]"
+          git merge base/dev --no-edit --allow-unrelated-histories -m "chore: merge base/dev into ${CLIENT_BRANCH} [auto-sync]"
 
           # Push the merged client1/dev back to Client-1
           git push Client-1 "HEAD:${CLIENT_BRANCH}"
