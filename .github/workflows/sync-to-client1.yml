@@ -1,0 +1,83 @@
+name: Sync base/dev to Client-1
+
+on:
+  push:
+    branches:
+      - base/dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sync-platform-to-client1-base-dev
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Platform (full history)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Sync base/dev to Client-1 base/dev
+        env:
+          TARGET_REPO: saikiran-vaddi-dg/Client-1
+          TARGET_BRANCH: base/dev
+          TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${TOKEN}" ]; then
+            echo "Missing secrets.CLIENT_DISPATCH_PAT"
+            exit 1
+          fi
+
+          # Validate token works (does not print token)
+          curl -fsSL -H "Authorization: token ${TOKEN}" https://api.github.com/user > /dev/null
+
+          git config user.name  "saikiran-vaddi-dg"
+          git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
+
+          # Add target remote using PAT
+          git remote remove Client-1 2>/dev/null || true
+          git remote add Client-1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          # Ensure we're on the source branch
+          git checkout base/dev
+
+          # Fetch latest remote state so --force-with-lease doesn't fail with "stale info"
+          git fetch --prune Client-1 "${TARGET_BRANCH}:${TARGET_BRANCH}" || true
+
+          # Push source to target (keeps Client-1/base/dev aligned to Platform/base/dev)
+          git push --force Client-1 "HEAD:${TARGET_BRANCH}"
+
+      - name: Merge base/dev into Client-1 client1/dev
+        env:
+          TARGET_REPO: saikiran-vaddi-dg/Client-1
+          CLIENT_BRANCH: client1/dev
+          TOKEN: ${{ secrets.CLIENT_DISPATCH_PAT }}
+        run: |
+          set -euo pipefail
+
+          git config user.name  "saikiran-vaddi-dg"
+          git config user.email "saikiran-vaddi-dg@users.noreply.github.com"
+
+          # Remote already added in previous step
+          git remote remove Client-1 2>/dev/null || true
+          git remote add Client-1 "https://x-access-token:${TOKEN}@github.com/${TARGET_REPO}.git"
+
+          # Fetch both branches from Client-1 repo
+          git fetch Client-1 "base/dev" "client1/dev" || {
+            echo "Failed to fetch branches from Client-1 — skipping merge"
+            exit 0
+          }
+
+          # Switch to client1/dev and merge Client-1's base/dev into it
+          git checkout -B "${CLIENT_BRANCH}" "Client-1/${CLIENT_BRANCH}"
+          git merge Client-1/base/dev --no-edit --allow-unrelated-histories -m "chore: merge base/dev into ${CLIENT_BRANCH} [auto-sync]"
+
+          # Push the merged client1/dev back to Client-1
+          git push Client-1 "HEAD:${CLIENT_BRANCH}"
